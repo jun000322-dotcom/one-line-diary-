@@ -1,0 +1,941 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>한 줄 일기</title>
+<style>
+  :root {
+    --bg: #faf8f4; --card: #ffffff; --text: #2b2a28; --muted: #8a867e;
+    --line: #e8e4dc; --accent: #d9774b; --accent-soft: #fbeee6; --dot: #e6e1d7;
+    --chip: #f3f0ea;
+    --holiday: #d64545; --sat: #3b6fd1;
+    --price: #b4541a; --price-bg: #fde7d6;
+    --jobs: #2f7d4f; --jobs-bg: #dcf1e3;
+    --fomc: #5b4bc4; --fomc-bg: #e6e2fb;
+    --growth: #0f7c8c; --growth-bg: #d5eff2;
+    --market: #6b6760; --market-bg: #ebe7e0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1a18; --card: #252421; --text: #ece9e3; --muted: #9a958c;
+      --line: #36342f; --accent: #e8915f; --accent-soft: #3a2b22; --dot: #34322d;
+      --chip: #2f2d29;
+      --holiday: #f07171; --sat: #7ea6f0;
+      --price: #f5a46b; --price-bg: #46301f;
+      --jobs: #7fd3a0; --jobs-bg: #1f3a2a;
+      --fomc: #b3a8ff; --fomc-bg: #2f2a4d;
+      --growth: #6fd0dc; --growth-bg: #173a3f;
+      --market: #b5afa5; --market-bg: #3a3833;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif;
+    line-height: 1.6;
+  }
+  main { max-width: 640px; margin: 0 auto; padding: 40px 16px 80px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 24px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; }
+  .streak { color: var(--muted); font-size: 14px; }
+  .streak b { color: var(--accent); }
+
+  .today {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 20px; margin-bottom: 28px;
+  }
+  .today .date { font-size: 14px; color: var(--muted); margin-bottom: 12px; }
+
+  .picker { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .picker .label { font-size: 13px; color: var(--muted); width: 32px; flex-shrink: 0; }
+  .emojis { display: flex; flex-wrap: wrap; gap: 6px; }
+  .emoji {
+    font-size: 20px; line-height: 1; width: 38px; height: 38px; padding: 0;
+    border-radius: 10px; background: var(--chip); border: 2px solid transparent;
+    color: inherit; transition: transform .1s;
+  }
+  .emoji:hover { transform: scale(1.08); }
+  .emoji[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+
+  .row { display: flex; gap: 8px; margin-top: 6px; }
+  input[type=text] {
+    flex: 1; min-width: 0; font: inherit; font-size: 17px; color: var(--text);
+    background: transparent; border: none; border-bottom: 2px solid var(--line);
+    padding: 8px 2px; outline: none;
+  }
+  input[type=text]:focus { border-color: var(--accent); }
+  button {
+    font: inherit; font-size: 14px; border: none; border-radius: 10px; cursor: pointer;
+    padding: 8px 16px; background: var(--accent); color: #fff; white-space: nowrap;
+  }
+  button.ghost { background: transparent; color: var(--muted); padding: 6px 10px; }
+  button.ghost:hover { color: var(--text); }
+  button:disabled { opacity: .4; cursor: default; }
+  .meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .saved { color: var(--accent); opacity: 0; transition: opacity .3s; }
+  .saved.show { opacity: 1; }
+
+  .news {
+    margin-top: 16px; padding: 14px 16px; border-radius: 12px; background: var(--accent-soft);
+    font-size: 14px;
+  }
+  .news[hidden] { display: none; }
+  .news .why { font-size: 12px; color: var(--accent); font-weight: 600; margin-bottom: 6px; }
+  .news .tag {
+    display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 6px; margin-right: 6px;
+    background: var(--card); color: var(--accent); font-weight: 600;
+  }
+  .news .title { color: var(--text); font-weight: 600; font-size: 16px; line-height: 1.45; }
+  .news .summary { color: var(--text); opacity: .8; margin: 6px 0 10px; line-height: 1.7; }
+  .news .orig { font-size: 13px; color: var(--muted); border-left: 2px solid var(--line); padding-left: 10px; margin-bottom: 10px; }
+  .news .orig[hidden] { display: none; }
+  .news .foot { display: flex; gap: 12px; align-items: center; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .news .foot a { color: var(--accent); }
+  .news .foot button { margin-left: auto; font-size: 12px; padding: 2px 6px; }
+
+  /* ---------- 달력 ---------- */
+  .cal { margin-bottom: 28px; }
+  .cal-head { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
+  .cal-head .ym { font-size: 17px; font-weight: 700; margin-right: auto; letter-spacing: -0.01em; }
+  .cal-head button { padding: 4px 10px; font-size: 15px; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+  .dow { text-align: center; font-size: 12px; color: var(--muted); padding: 2px 0 4px; }
+  .dow.sun { color: var(--holiday); } .dow.sat { color: var(--sat); }
+  button.day {
+    min-height: 78px; padding: 4px 5px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text); text-align: left; white-space: normal;
+    display: flex; flex-direction: column; gap: 2px; overflow: hidden; font-size: 11px; line-height: 1.3;
+  }
+  button.day:hover { border-color: var(--muted); }
+  button.day.other { opacity: .38; }
+  button.day.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  button.day.sel { background: var(--accent-soft); }
+  .day .num { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; }
+  .day.sun .num, .day.hol .num { color: var(--holiday); }
+  .day.sat:not(.hol) .num { color: var(--sat); }
+  .day .mark { font-size: 13px; line-height: 1; }
+  .day .hname { color: var(--holiday); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chips { display: flex; flex-wrap: wrap; gap: 2px; }
+  .chip { font-size: 10px; font-weight: 700; border-radius: 4px; padding: 0 4px; white-space: nowrap; }
+  .chip.price { background: var(--price-bg); color: var(--price); }
+  .chip.jobs { background: var(--jobs-bg); color: var(--jobs); }
+  .chip.fomc { background: var(--fomc-bg); color: var(--fomc); }
+  .chip.growth { background: var(--growth-bg); color: var(--growth); }
+  .chip.market { background: var(--market-bg); color: var(--market); }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: var(--muted); margin-top: 8px; align-items: center; }
+  .legend .chip { margin-right: 3px; }
+  .cal-note { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .cal-detail {
+    margin-top: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; font-size: 14px;
+  }
+  .cal-detail h3 { margin: 0 0 8px; font-size: 15px; }
+  .cal-detail .item { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; }
+  .cal-detail .item .chip { flex-shrink: 0; }
+  .cal-detail .sub { color: var(--muted); font-size: 12px; }
+  .cal-detail .hol-item { color: var(--holiday); font-weight: 600; }
+  .cal-detail + .cal-detail { margin-top: 10px; }
+  .cal-detail .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .cal-detail .head h3 { margin: 0; }
+  .cal-detail .head .actions { display: flex; }
+  .cal-detail .diary-text { word-break: break-word; }
+  .cal-detail .diary-text input[type=text] { font-size: 15px; padding: 2px; width: 100%; }
+  .cal-detail .diary-news { color: var(--muted); font-size: 12px; text-decoration: none; display: block; margin-top: 4px; }
+  .cal-detail .diary-news:hover { color: var(--accent); }
+  footer { display: flex; gap: 4px; justify-content: center; margin-top: 32px; }
+  @media (max-width: 480px) {
+    .emoji { width: 34px; height: 34px; font-size: 18px; }
+    /* 좁은 화면에서는 칸 안의 글자 대신 색 점으로 */
+    button.day { min-height: 58px; padding: 3px; }
+    .day .hname { font-size: 9px; }
+    .day .chip { font-size: 0; width: 7px; height: 7px; padding: 0; border-radius: 50%; }
+    .chip.price { background: var(--price); } .chip.jobs { background: var(--jobs); } .chip.fomc { background: var(--fomc); }
+    .chip.growth { background: var(--growth); } .chip.market { background: var(--market); }
+    .cal-detail .chip, .legend .chip { font-size: 10px; width: auto; height: auto; padding: 0 4px; border-radius: 4px; }
+    .cal-detail .chip.price, .legend .chip.price { background: var(--price-bg); }
+    .cal-detail .chip.jobs, .legend .chip.jobs { background: var(--jobs-bg); }
+    .cal-detail .chip.fomc, .legend .chip.fomc { background: var(--fomc-bg); }
+    .cal-detail .chip.growth, .legend .chip.growth { background: var(--growth-bg); }
+    .cal-detail .chip.market, .legend .chip.market { background: var(--market-bg); }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>한 줄 일기</h1>
+    <div class="streak" id="streak"></div>
+  </header>
+
+  <section class="today">
+    <div class="date" id="todayLabel"></div>
+    <div class="picker">
+      <span class="label">날씨</span>
+      <div class="emojis" id="weatherPicker" role="group" aria-label="오늘의 날씨"></div>
+    </div>
+    <div class="picker">
+      <span class="label">기분</span>
+      <div class="emojis" id="moodPicker" role="group" aria-label="오늘의 기분"></div>
+    </div>
+    <form class="row" id="todayForm">
+      <input type="text" id="todayInput" maxlength="120" placeholder="오늘을 한 줄로 남겨보세요" autocomplete="off">
+      <button type="submit" id="saveBtn">저장</button>
+    </form>
+    <div class="meta">
+      <span class="saved" id="savedMsg">저장했어요 ✓</span>
+      <span id="count">0 / 120</span>
+    </div>
+
+    <div class="news" id="news" hidden>
+      <div class="why" id="newsWhy"></div>
+      <div id="newsBody"></div>
+    </div>
+  </section>
+
+  <section class="cal">
+    <div class="cal-head">
+      <span class="ym" id="calTitle"></span>
+      <button class="ghost" id="calPrev" aria-label="이전 달">‹</button>
+      <button class="ghost" id="calToday">오늘</button>
+      <button class="ghost" id="calNext" aria-label="다음 달">›</button>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="legend">
+      <span><span class="chip price">물가</span>CPI·PCE·PPI</span>
+      <span><span class="chip jobs">고용</span>고용보고서</span>
+      <span><span class="chip growth">성장</span>GDP·소매판매</span>
+      <span><span class="chip fomc">금리</span>FOMC·한국은행</span>
+      <span><span class="chip market">휴장</span>미국 증시 휴장·조기폐장</span>
+    </div>
+    <div class="cal-note" id="calNote"></div>
+    <div class="cal-detail" id="calEvents"></div>
+    <div class="cal-detail" id="calDiary"></div>
+  </section>
+
+  <footer>
+    <button class="ghost" id="exportBtn">내보내기</button>
+    <button class="ghost" id="importBtn">가져오기</button>
+    <input type="file" id="importFile" accept="application/json" hidden>
+  </footer>
+</main>
+
+<script>
+'use strict';
+const KEY = 'one-line-diary';
+const FEED_CACHE_KEY = 'one-line-diary-feed-v2';
+const MAX = 120;
+const $ = id => document.getElementById(id);
+
+// ---------- 날씨 · 기분 ----------
+const WEATHERS = [
+  { e: '☀️', n: '맑음' }, { e: '⛅', n: '구름 조금' }, { e: '☁️', n: '흐림' }, { e: '🌧️', n: '비' },
+  { e: '⛈️', n: '뇌우' }, { e: '❄️', n: '눈' }, { e: '🌫️', n: '안개' }, { e: '💨', n: '바람' },
+];
+// 좋은 기분은 '유지', 나쁜 기분은 '전환'하는 소식을 고릅니다.
+// kw: 뉴스 고를 때 쓰는 영어 키워드 (제목에 있으면 2점, 요약에 있으면 1점)
+const MOODS = [
+  { e: '😄', n: '기쁨', goal: '기분 유지', why: '기쁜 날엔 함께 축하하고 싶은 소식으로 기쁨을 이어가요',
+    kw: ['success', 'record', 'first', 'win', 'wins', 'celebrat', 'breakthrough', 'joy', 'restored', 'saved', 'approved', 'achiev', 'milestone', 'return'] },
+  { e: '😌', n: '평온', goal: '기분 유지', why: '평온한 하루엔 잔잔하고 따뜻한 이야기로 그 마음을 지켜요',
+    kw: ['nature', 'garden', 'bird', 'forest', 'ocean', 'tree', 'tea', 'library', 'music', 'art', 'retired', 'community', 'peaceful', 'quiet', 'walk'] },
+  { e: '😐', n: '무덤덤', goal: '기분 전환', why: '무덤덤한 날엔 호기심이 반짝 깨어나는 놀라운 발견을 가져왔어요',
+    kw: ['discover', 'surprising', 'ancient', 'space', 'hidden', 'first-ever', 'rare', 'mystery', 'species', 'unexpected', 'reveal', 'fossil', 'planet', 'secret'] },
+  { e: '😢', n: '슬픔', goal: '기분 전환', why: '마음이 무거운 날엔 누군가의 따뜻한 선행 이야기를 건네요',
+    kw: ['kindness', 'kind', 'donat', 'volunteer', 'rescue', 'reunite', 'help', 'community', 'hero', 'generous', 'grateful', 'love', 'gift', 'neighbor', 'stranger'] },
+  { e: '😠', n: '화남', goal: '기분 전환', why: '화가 난 날엔 피식 웃게 되는 귀여운 소식으로 열을 식혀요',
+    kw: ['dog', 'cat', 'puppy', 'kitten', 'animal', 'funny', 'laugh', 'smile', 'adorable', 'play', 'baby', 'otter', 'penguin', 'goat', 'bird'] },
+  { e: '😴', n: '피곤', goal: '기분 전환', why: '지친 날엔 기운이 나는 소식으로 작은 활력을 채워요',
+    kw: ['energy', 'boost', 'rest', 'sleep', 'recovery', 'coffee', 'walk', 'sunlight', 'refresh', 'young', 'youthful', 'strength', 'restore', 'nap'] },
+  { e: '😰', n: '불안', goal: '기분 전환', why: '불안한 날엔 세상이 조금씩 나아지고 있다는 증거를 보여드려요',
+    kw: ['fall', 'falls', 'decline', 'drop', 'reduce', 'protect', 'restored', 'recover', 'success', 'solution', 'progress', 'safe', 'cleaner', 'prevent', 'lower'] },
+];
+// 어떤 기분이든 무거운 소식은 피합니다
+const HEAVY = ['death', 'deaths', 'dead', 'die', 'dying', 'kill', 'killed', 'harm', 'harming', 'deadly', 'fatal', 'danger',
+  'outbreak', 'losing', 'loses', 'toxic', 'suicide', 'war', 'attack', 'crash', 'cancer', 'dementia', 'disease', 'crisis', 'abuse', 'shooting'];
+// 모든 기분에 공통으로 반가운 단어
+const UPLIFT = ['good news', 'hope', 'happy', 'heartwarming', 'inspir', 'celebrat', 'kindness', 'success', 'thanks'];
+
+const FEEDS = [
+  { name: 'Good News Network', url: 'https://www.goodnewsnetwork.org/feed/', bonus: 2 },
+  { name: 'Reasons to be Cheerful', url: 'https://reasonstobecheerful.world/feed/', bonus: 2 },
+  { name: 'ScienceDaily', url: 'https://www.sciencedaily.com/rss/top/science.xml', bonus: 0 },
+  { name: 'ScienceDaily', url: 'https://www.sciencedaily.com/rss/health_medicine.xml', bonus: 0 },
+  { name: 'Medical Xpress', url: 'https://medicalxpress.com/rss-feed/', bonus: 0 },
+];
+// 기사 한 편이 아닌 모음·광고성 글은 제외
+const SKIP_TITLE = /^(good news in history|sponsored|podcast)/i;
+const RSS2JSON = 'https://api.rss2json.com/v1/api.json?rss_url=';
+
+// ---------- 저장소 ----------
+function normalize(v) {
+  if (typeof v === 'string') return { text: v };            // 이전 버전(문자열) 호환
+  if (v && typeof v === 'object' && typeof v.text === 'string') return v;
+  return null;
+}
+function load() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(KEY)) || {};
+    const out = {};
+    for (const [k, v] of Object.entries(raw)) { const n = normalize(v); if (n) out[k] = n; }
+    return out;
+  } catch { return {}; }
+}
+function persist() {
+  try { localStorage.setItem(KEY, JSON.stringify(entries)); } catch {}
+}
+let entries = load();
+
+// ---------- 날짜 ----------
+const pad = n => String(n).padStart(2, '0');
+const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const todayKey = () => keyOf(new Date());
+const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+function pretty(key, long) {
+  const [y, m, d] = key.split('-').map(Number);
+  const w = DAYS[new Date(y, m - 1, d).getDay()];
+  return long ? `${y}년 ${m}월 ${d}일 ${w}요일` : `${y}.${pad(m)}.${pad(d)} (${w})`;
+}
+const findMood = e => MOODS.find(m => m.e === e);
+
+function streak() {
+  const d = new Date();
+  if (!entries[keyOf(d)]) d.setDate(d.getDate() - 1); // 오늘 아직 안 썼으면 어제부터
+  let n = 0;
+  while (entries[keyOf(d)]) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
+
+// ---------- 오늘 작성 영역 ----------
+const draft = { weather: null, mood: null };
+
+function buildPicker(el, list, field) {
+  el.innerHTML = '';
+  for (const it of list) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'emoji'; b.textContent = it.e;
+    b.title = it.n; b.setAttribute('aria-label', it.n);
+    b.onclick = () => {
+      draft[field] = draft[field] === it.e ? null : it.e;
+      syncPickers();
+    };
+    el.appendChild(b);
+  }
+}
+function syncPickers() {
+  [['weatherPicker', 'weather'], ['moodPicker', 'mood']].forEach(([id, f]) => {
+    for (const b of $(id).children) b.setAttribute('aria-pressed', String(b.textContent === draft[f]));
+  });
+}
+
+function renderToday() {
+  const k = todayKey();
+  const e = entries[k];
+  $('todayLabel').textContent = pretty(k, true);
+  $('todayInput').value = e ? e.text : '';
+  draft.weather = e ? e.weather || null : null;
+  draft.mood = e ? e.mood || null : null;
+  syncPickers();
+  updateCount();
+  renderNews(e && e.news);
+}
+function updateCount() {
+  $('count').textContent = `${$('todayInput').value.length} / ${MAX}`;
+  $('saveBtn').textContent = entries[todayKey()] ? '수정' : '저장';
+}
+
+// ---------- 뉴스 ----------
+const stripHtml = html => {
+  const doc = new DOMParser().parseFromString(html || '', 'text/html');
+  return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
+};
+// 요약 끝의 "The post ... appeared first on ..." 같은 꼬리말을 떼고, 문장 단위로 600자 안에서 자릅니다
+function trimSummary(s) {
+  s = s.replace(/\s*(The post .+ appeared first on .+|Continue reading.*|Read more.*)$/i, '').replace(/\s*\[…\]|\s*\[\.\.\.\]/g, '…');
+  if (s.length <= 600) return s;
+  const cut = s.slice(0, 600);
+  const end = cut.lastIndexOf('. ');
+  return (end > 200 ? cut.slice(0, end + 1) : cut) + ' …';
+}
+// rss2json의 pubDate는 "YYYY-MM-DD HH:MM:SS"(UTC) 형식
+const parsePub = s => { const d = new Date(String(s).replace(' ', 'T') + 'Z'); return isNaN(d) ? null : d; };
+
+async function getFeedItems() {
+  try {
+    const c = JSON.parse(localStorage.getItem(FEED_CACHE_KEY));
+    if (c && c.day === todayKey() && Date.now() - c.at < 3 * 3600e3 && c.items.length) return c.items;
+  } catch {}
+  const results = await Promise.allSettled(FEEDS.map(async f => {
+    const r = await fetch(RSS2JSON + encodeURIComponent(f.url));
+    if (!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    if (j.status !== 'ok') throw new Error(j.message);
+    return j.items.map(it => ({
+      title: stripHtml(it.title),
+      summary: trimSummary(stripHtml(it.description)),
+      link: it.link,
+      source: f.name,
+      bonus: f.bonus,
+      date: (parsePub(it.pubDate) || new Date()).toISOString(),
+    }));
+  }));
+  const items = results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
+    .filter(it => it.title && !SKIP_TITLE.test(it.title) && /^https?:\/\//.test(it.link));
+  if (!items.length) throw new Error('no items');
+  try { localStorage.setItem(FEED_CACHE_KEY, JSON.stringify({ day: todayKey(), at: Date.now(), items })); } catch {}
+  return items;
+}
+
+function rankForMood(items, mood, dayKey) {
+  const count = (text, words) => words.reduce((s, w) => s + (text.includes(w) ? 1 : 0), 0);
+  return items.map(it => {
+    const t = it.title.toLowerCase(), s = it.summary.toLowerCase();
+    const words = text => ' ' + text.replace(/[^a-z0-9'-]+/g, ' ') + ' ';
+    let score = count(t, mood.kw) * 2 + count(s, mood.kw) + count(t + ' ' + s, UPLIFT);
+    // 무거운 단어는 단어 단위로 찾아 크게 감점 ('die'가 'diet'에 걸리지 않도록)
+    const heavy = HEAVY.map(w => ` ${w} `);
+    score -= count(words(t), heavy) * 5 + count(words(s), heavy) * 2;
+    score += it.bonus || 0;                                  // 좋은 소식 전문 매체 가산점
+    if (keyOf(new Date(it.date)) === dayKey) score += 2;     // 그날 나온 소식 우선
+    return { it, score };
+  }).sort((a, b) => b.score - a.score || b.it.date.localeCompare(a.it.date)).map(x => x.it);
+}
+
+let newsBusy = false;
+async function pickNews(skipCurrent) {
+  const k = todayKey();
+  const e = entries[k];
+  if (!e || !e.mood || newsBusy) return;
+  const mood = findMood(e.mood);
+  if (!mood) return;
+  newsBusy = true;
+  showNewsState('오늘의 소식을 찾는 중…');
+  try {
+    const ranked = rankForMood(await getFeedItems(), mood, k);
+    const seen = new Set(skipCurrent && e.news ? [...(e.news.seen || []), e.news.link] : []);
+    let pick = ranked.find(it => !seen.has(it.link));
+    if (!pick) { seen.clear(); pick = ranked[0]; }       // 다 봤으면 처음부터
+    showNewsState('한국어로 옮기는 중…');
+    const ko = await translateNews(pick);
+    e.news = { ...pick, ...ko, mood: mood.e, seen: [...seen] };
+    persist();
+    renderNews(e.news);
+    renderCalendar();
+  } catch {
+    showNewsState('소식을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.', true);
+  } finally { newsBusy = false; }
+}
+
+// ---------- 번역 (영어 → 한국어) ----------
+async function translate(text) {
+  if (!text) return '';
+  try {   // 1순위: 구글 번역 공개 엔드포인트
+    const r = await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ko&dt=t&q=' + encodeURIComponent(text));
+    if (!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    const out = j[0].map(seg => seg[0]).join('');
+    if (out) return out;
+  } catch {}
+  try {   // 2순위: MyMemory (요청당 500자 제한이라 문장 단위로 나눠 보냄)
+    const parts = text.match(/[^.!?]+[.!?]*\s*/g) || [text];
+    const chunks = [];
+    for (const p of parts) {
+      if (chunks.length && (chunks[chunks.length - 1] + p).length < 450) chunks[chunks.length - 1] += p;
+      else chunks.push(p.slice(0, 450));
+    }
+    const res = await Promise.all(chunks.map(async c => {
+      const r = await fetch('https://api.mymemory.translated.net/get?langpair=en|ko&q=' + encodeURIComponent(c));
+      const j = await r.json();
+      if (j.responseStatus !== 200) throw new Error(j.responseDetails);
+      return j.responseData.translatedText;
+    }));
+    return res.join(' ');
+  } catch {}
+  return '';   // 번역 실패 시 원문만 보여줍니다
+}
+async function translateNews(n) {
+  const [titleKo, summaryKo] = await Promise.all([translate(n.title), translate(n.summary)]);
+  return { titleKo, summaryKo };
+}
+
+function showNewsState(msg, retry) {
+  $('news').hidden = false;
+  $('newsWhy').textContent = '';
+  const body = $('newsBody');
+  body.textContent = msg;
+  if (retry) {
+    const b = document.createElement('button');
+    b.className = 'ghost'; b.textContent = '다시 시도';
+    b.onclick = () => pickNews(false);
+    body.appendChild(b);
+  }
+}
+
+function renderNews(n) {
+  if (!n) { $('news').hidden = true; return; }
+  const mood = findMood(n.mood);
+  $('news').hidden = false;
+  const why = $('newsWhy');
+  why.innerHTML = '';
+  if (mood) {
+    const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = mood.goal;
+    why.append(tag, `${n.mood} ${mood.why}`);
+  } else why.textContent = '오늘의 소식';
+
+  const body = $('newsBody');
+  body.innerHTML = '';
+  const hasKo = !!(n.titleKo || n.summaryKo);
+  const title = document.createElement('div'); title.className = 'title';
+  title.textContent = n.titleKo || n.title;
+  const s = document.createElement('div'); s.className = 'summary';
+  s.textContent = n.summaryKo || n.summary;
+
+  // 원문은 접어 두었다가 필요할 때 펼쳐 봅니다
+  const orig = document.createElement('div'); orig.className = 'orig'; orig.hidden = true;
+  const ot = document.createElement('div'); ot.style.fontWeight = '600'; ot.textContent = n.title;
+  const os = document.createElement('div'); os.textContent = n.summary;
+  orig.append(ot, os);
+
+  const foot = document.createElement('div'); foot.className = 'foot';
+  const src = document.createElement('span');
+  src.textContent = `${n.source} · ${keyOf(new Date(n.date))}`;
+  foot.appendChild(src);
+  if (hasKo) {
+    const t = document.createElement('button'); t.className = 'ghost'; t.textContent = '원문 보기';
+    t.style.marginLeft = '0';
+    t.onclick = () => { orig.hidden = !orig.hidden; t.textContent = orig.hidden ? '원문 보기' : '원문 접기'; };
+    foot.appendChild(t);
+  }
+  const a = document.createElement('a');
+  a.href = n.link; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '기사 전체 ↗';
+  foot.appendChild(a);
+  const isToday = entries[todayKey()] && entries[todayKey()].news === n;
+  if (isToday) {
+    const more = document.createElement('button');
+    more.className = 'ghost'; more.textContent = '다른 소식 ↻';
+    more.onclick = () => pickNews(true);
+    foot.appendChild(more);
+  }
+  body.append(title, s, orig, foot);
+
+  // 이전 버전에서 저장된(번역 없는) 오늘 소식은 지금 번역해 둡니다
+  if (isToday && !hasKo && !n.translateTried) {
+    n.translateTried = true;
+    translateNews(n).then(ko => {
+      if (!ko.titleKo && !ko.summaryKo) return;
+      Object.assign(n, ko); persist();
+      if (entries[todayKey()] && entries[todayKey()].news === n) { renderNews(n); renderCalendar(); }
+    });
+  }
+}
+
+// ---------- 한국 공휴일 ----------
+// 음력 공휴일(설날·부처님오신날·추석)의 양력 날짜. 이 표에 있는 해만 음력 공휴일이 표시됩니다.
+const LUNAR = {
+  2025: { seol: '01-29', buddha: '05-05', chuseok: '10-06' },
+  2026: { seol: '02-17', buddha: '05-24', chuseok: '09-25' },
+  2027: { seol: '02-07', buddha: '05-13', chuseok: '09-15' },
+  2028: { seol: '01-27', buddha: '05-02', chuseok: '10-03' },   // 한국시간 기준 초하루라 중국(1/26)과 하루 다름
+  2029: { seol: '02-13', buddha: '05-20', chuseok: '09-22' },
+  2030: { seol: '02-03', buddha: '05-09', chuseok: '09-12' },
+};
+// 선거일·임시공휴일 등 그해에만 있는 공휴일
+const SPECIAL_HOLIDAYS = {
+  '2025-01-27': '임시공휴일', '2025-06-03': '대통령 선거일', '2026-06-03': '지방선거일',
+};
+const holidayCache = {};
+function holidaysFor(y) {
+  if (holidayCache[y]) return holidayCache[y];
+  const map = {};   // 'YYYY-MM-DD' → [{ name, sub, end }]
+  const add = (date, name, sub, end) => {
+    const k = keyOf(date);
+    (map[k] = map[k] || []).push({ name, sub, end: end || date, lunar: !!end });
+  };
+  // [월, 일, 이름, 대체공휴일 적용 여부]
+  const fixed = [[1, 1, '신정', false], [3, 1, '3·1절', true], [5, 5, '어린이날', true], [6, 6, '현충일', false],
+    [8, 15, '광복절', true], [10, 3, '개천절', true], [10, 9, '한글날', true], [12, 25, '성탄절', true]];
+  if (y >= 2026) fixed.push([5, 1, '노동절', true], [7, 17, '제헌절', true]);   // 2026년부터 공휴일
+  for (const [m, d, n, s] of fixed) add(new Date(y, m - 1, d), n, s);
+  const L = LUNAR[y];
+  if (L) {
+    for (const [key, name] of [['seol', '설날'], ['chuseok', '추석']]) {
+      const [m, d] = L[key].split('-').map(Number);
+      const end = new Date(y, m - 1, d + 1);
+      add(new Date(y, m - 1, d - 1), name + ' 연휴', true, end);
+      add(new Date(y, m - 1, d), name, true, end);
+      add(end, name + ' 연휴', true, end);
+    }
+    const [bm, bd] = L.buddha.split('-').map(Number);
+    add(new Date(y, bm - 1, bd), '부처님오신날', true);
+  }
+  for (const [k, n] of Object.entries(SPECIAL_HOLIDAYS)) if (k.startsWith(y + '-')) {
+    const [, m, d] = k.split('-').map(Number); add(new Date(y, m - 1, d), n, false);
+  }
+
+  // 대체공휴일: 설·추석은 일요일이나 다른 공휴일과 겹칠 때, 그 밖의 대상 공휴일은 토·일요일이나 다른 공휴일과 겹칠 때
+  // 연휴(또는 그날) 다음의 첫 평일 비공휴일로 하루씩 지정합니다.
+  const requests = [];
+  for (const k of Object.keys(map).sort()) {
+    const list = map[k];
+    const dow = new Date(k + 'T00:00').getDay();
+    const eligible = list.filter(h => h.sub);
+    if (!eligible.length) continue;
+    const weekendHits = eligible.filter(h => dow === 0 || (dow === 6 && !h.lunar));
+    if (weekendHits.length) weekendHits.forEach(h => requests.push(h));
+    else if (list.length > 1) requests.push(eligible.reduce((a, b) => (b.end > a.end ? b : a)));
+  }
+  const isOff = dt => dt.getDay() === 0 || dt.getDay() === 6 || map[keyOf(dt)];
+  for (const h of requests) {
+    const dt = new Date(h.end);
+    do dt.setDate(dt.getDate() + 1); while (isOff(dt));
+    const base = h.name.replace(' 연휴', '');
+    add(dt, `대체공휴일(${base})`, false);
+  }
+  return (holidayCache[y] = map);
+}
+const holidayNames = k => (holidaysFor(+k.slice(0, 4))[k] || []).map(h => h.name);
+
+// ---------- 미국 경제 일정 ----------
+// 출처: BLS(CPI·PPI·고용보고서), BEA(PCE·GDP), Census(소매판매), 연준(FOMC), NYSE(휴장), 한국은행(금통위)
+// 공식 발표 일정. 미국 일정은 미국 동부시간 기준 날짜입니다.
+const ECON_YEARS = [2026, 2027];
+const CPI_DATES = [   // [발표일, 기준 월]
+  ['2026-01-13', '2025-12'], ['2026-02-13', '2026-01'], ['2026-03-11', '2026-02'], ['2026-04-10', '2026-03'],
+  ['2026-05-12', '2026-04'], ['2026-06-10', '2026-05'], ['2026-07-14', '2026-06'], ['2026-08-12', '2026-07'],
+  ['2026-09-11', '2026-08'], ['2026-10-14', '2026-09'], ['2026-11-10', '2026-10'], ['2026-12-10', '2026-11'],
+  ['2027-01-13', '2026-12'], ['2027-02-11', '2027-01'], ['2027-03-10', '2027-02'], ['2027-04-13', '2027-03'],
+  ['2027-05-12', '2027-04'], ['2027-06-10', '2027-05'], ['2027-07-14', '2027-06'], ['2027-08-11', '2027-07'],
+  ['2027-09-14', '2027-08'], ['2027-10-14', '2027-09'], ['2027-11-10', '2027-10'], ['2027-12-10', '2027-11'],
+];
+const JOBS_DATES = [
+  ['2026-01-09', '2025-12'], ['2026-02-11', '2026-01'], ['2026-03-06', '2026-02'], ['2026-04-03', '2026-03'],
+  ['2026-05-08', '2026-04'], ['2026-06-05', '2026-05'], ['2026-07-02', '2026-06'], ['2026-08-07', '2026-07'],
+  ['2026-09-04', '2026-08'], ['2026-10-02', '2026-09'], ['2026-11-06', '2026-10'], ['2026-12-04', '2026-11'],
+  ['2027-01-08', '2026-12'], ['2027-02-05', '2027-01'], ['2027-03-05', '2027-02'], ['2027-04-02', '2027-03'],
+  ['2027-05-07', '2027-04'], ['2027-06-04', '2027-05'], ['2027-07-02', '2027-06'], ['2027-08-06', '2027-07'],
+  ['2027-09-03', '2027-08'], ['2027-10-08', '2027-09'], ['2027-11-05', '2027-10'], ['2027-12-03', '2027-11'],
+];
+const PCE_DATES = [   // [발표일, 기준 월, 발표 시각(기본 08:30)]
+  ['2026-01-22', '2025-10·11', '10:00'], ['2026-02-20', '2025-12'], ['2026-03-13', '2026-01'], ['2026-04-09', '2026-02'],
+  ['2026-04-30', '2026-03'], ['2026-05-28', '2026-04'], ['2026-06-25', '2026-05'], ['2026-07-30', '2026-06'],
+  ['2026-08-26', '2026-07'], ['2026-09-30', '2026-08'], ['2026-10-29', '2026-09'], ['2026-11-25', '2026-10'],
+  ['2026-12-23', '2026-11'],
+  ['2027-01-28', '2026-12'], ['2027-02-25', '2027-01'], ['2027-03-31', '2027-02'], ['2027-04-29', '2027-03'],
+  ['2027-05-27', '2027-04'], ['2027-06-25', '2027-05'], ['2027-07-29', '2027-06'], ['2027-08-25', '2027-07'],
+  ['2027-09-30', '2027-08'], ['2027-10-28', '2027-09'], ['2027-11-24', '2027-10'], ['2027-12-22', '2027-11'],
+];
+const FOMC_DATES = [  // [회의 시작일, 결정일(둘째 날), 경제전망(점도표) 발표 여부]
+  ['2026-01-27', '2026-01-28', false], ['2026-03-17', '2026-03-18', true], ['2026-04-28', '2026-04-29', false],
+  ['2026-06-16', '2026-06-17', true], ['2026-07-28', '2026-07-29', false], ['2026-09-15', '2026-09-16', true],
+  ['2026-10-27', '2026-10-28', false], ['2026-12-08', '2026-12-09', true],
+  ['2027-01-26', '2027-01-27', false], ['2027-03-16', '2027-03-17', false], ['2027-04-27', '2027-04-28', false],
+  ['2027-06-08', '2027-06-09', false], ['2027-07-27', '2027-07-28', false], ['2027-09-14', '2027-09-15', false],
+  ['2027-10-26', '2027-10-27', false], ['2027-11-16', '2027-11-17', false],
+];
+const PPI_DATES = [
+  ['2026-01-14', '2025-11'], ['2026-01-30', '2025-12'], ['2026-02-27', '2026-01'], ['2026-03-18', '2026-02'],
+  ['2026-04-14', '2026-03'], ['2026-05-13', '2026-04'], ['2026-06-11', '2026-05'], ['2026-07-15', '2026-06'],
+  ['2026-08-13', '2026-07'], ['2026-09-10', '2026-08'], ['2026-10-15', '2026-09'], ['2026-11-13', '2026-10'],
+  ['2026-12-15', '2026-11'],
+  ['2027-01-14', '2026-12'], ['2027-02-12', '2027-01'], ['2027-03-12', '2027-02'], ['2027-04-14', '2027-03'],
+  ['2027-05-13', '2027-04'], ['2027-06-11', '2027-05'], ['2027-07-15', '2027-06'], ['2027-08-10', '2027-07'],
+  ['2027-09-10', '2027-08'], ['2027-10-15', '2027-09'], ['2027-11-12', '2027-10'], ['2027-12-15', '2027-11'],
+];
+const RETAIL_DATES = [
+  ['2026-01-14', '2025-11'], ['2026-02-10', '2025-12'], ['2026-03-06', '2026-01'], ['2026-04-01', '2026-02'],
+  ['2026-04-21', '2026-03'], ['2026-05-14', '2026-04'], ['2026-06-17', '2026-05'], ['2026-07-16', '2026-06'],
+  ['2026-08-14', '2026-07'], ['2026-09-16', '2026-08'], ['2026-10-15', '2026-09'], ['2026-11-17', '2026-10'],
+  ['2026-12-16', '2026-11'],
+  ['2027-01-15', '2026-12'], ['2027-02-17', '2027-01'], ['2027-03-16', '2027-02'], ['2027-04-16', '2027-03'],
+  ['2027-05-14', '2027-04'], ['2027-06-16', '2027-05'], ['2027-07-16', '2027-06'], ['2027-08-16', '2027-07'],
+  ['2027-09-16', '2027-08'], ['2027-10-15', '2027-09'], ['2027-11-16', '2027-10'], ['2027-12-15', '2027-11'],
+];
+const GDP_DATES = [   // [발표일, 기준 분기] — 속보치(advance)만
+  ['2026-02-20', '2025년 4분기'], ['2026-04-30', '2026년 1분기'], ['2026-07-30', '2026년 2분기'], ['2026-10-29', '2026년 3분기'],
+  ['2027-01-28', '2026년 4분기'], ['2027-04-29', '2027년 1분기'], ['2027-07-29', '2027년 2분기'], ['2027-10-28', '2027년 3분기'],
+];
+// 한국은행 금융통화위원회 기준금리 결정 회의 (2027년 일정은 아직 발표 전)
+const BOK_DATES = ['2026-01-15', '2026-02-26', '2026-04-10', '2026-05-28', '2026-07-16', '2026-08-27', '2026-10-22', '2026-11-26'];
+const BOK_YEARS = [2026];
+const NYSE_CLOSED = [
+  ['2026-01-01', '새해 첫날'], ['2026-01-19', '마틴 루서 킹 데이'], ['2026-02-16', '대통령의 날'], ['2026-04-03', '성금요일'],
+  ['2026-05-25', '현충일(Memorial Day)'], ['2026-06-19', '준틴스'], ['2026-07-03', '독립기념일(대체)'], ['2026-09-07', '노동절'],
+  ['2026-11-26', '추수감사절'], ['2026-12-25', '크리스마스'],
+  ['2027-01-01', '새해 첫날'], ['2027-01-18', '마틴 루서 킹 데이'], ['2027-02-15', '대통령의 날'], ['2027-03-26', '성금요일'],
+  ['2027-05-31', '현충일(Memorial Day)'], ['2027-06-18', '준틴스(대체)'], ['2027-07-05', '독립기념일(대체)'], ['2027-09-06', '노동절'],
+  ['2027-11-25', '추수감사절'], ['2027-12-24', '크리스마스(대체)'],
+];
+const NYSE_EARLY = [['2026-11-27', '추수감사절 다음 날'], ['2026-12-24', '크리스마스 이브'], ['2027-11-26', '추수감사절 다음 날']];
+
+const refLabel = r => {
+  const [y, m] = r.split('-');
+  return `${y}년 ${m.split('·').map(Number).join('·')}월분`;
+};
+const ECON = {};
+{
+  const push = (k, ev) => (ECON[k] = ECON[k] || []).push(ev);
+  for (const [k, r] of CPI_DATES) push(k, { cls: 'price', chip: 'CPI', time: '08:30',
+    title: `소비자물가지수(CPI) 발표 · ${refLabel(r)}`, desc: '물가 흐름을 보여주는 대표 지표로, 금리 전망을 크게 움직여요.' });
+  for (const [k, r, t] of PCE_DATES) push(k, { cls: 'price', chip: 'PCE', time: t || '08:30',
+    title: `개인소비지출(PCE) 물가 발표 · ${refLabel(r)}`, desc: '연준이 가장 중요하게 보는 물가 지표예요.' });
+  for (const [k, r] of JOBS_DATES) push(k, { cls: 'jobs', chip: '고용', time: '08:30',
+    title: `고용보고서 발표 · ${refLabel(r)}`, desc: '비농업 일자리 수와 실업률이 나와요.' });
+  for (const [start, k, sep] of FOMC_DATES) push(k, { cls: 'fomc', chip: 'FOMC', time: '14:00',
+    title: '연준(FOMC) 기준금리 결정' + (sep ? ' · 경제전망(점도표) 함께 발표' : ''),
+    desc: `회의 ${+start.slice(8)}~${+k.slice(8)}일. 결정문 발표 30분 뒤 의장 기자회견이 열려요.` });
+  for (const [k, r] of PPI_DATES) push(k, { cls: 'price', chip: 'PPI', time: '08:30',
+    title: `생산자물가지수(PPI) 발표 · ${refLabel(r)}`, desc: '기업이 받는 가격 흐름으로, 소비자물가의 앞날을 미리 보여줘요.' });
+  for (const [k, q] of GDP_DATES) push(k, { cls: 'growth', chip: 'GDP', time: '08:30',
+    title: `GDP 속보치 발표 · ${q}`, desc: '미국 경제가 지난 분기에 얼마나 성장했는지 처음 나오는 성적표예요.' });
+  for (const [k, r] of RETAIL_DATES) push(k, { cls: 'growth', chip: '소매', time: '08:30',
+    title: `소매판매 발표 · ${refLabel(r)}`, desc: '미국 경제의 약 70%를 차지하는 소비가 얼마나 강한지 보여줘요.' });
+  for (const [k, n] of NYSE_CLOSED) push(k, { cls: 'market', chip: '휴장',
+    title: `미국 증시 휴장 · ${n}`, desc: '뉴욕증권거래소·나스닥이 하루 종일 쉬어요.' });
+  for (const [k, n] of NYSE_EARLY) push(k, { cls: 'market', chip: '단축', time: '13:00',
+    title: `미국 증시 조기폐장 · ${n}`, desc: '평소(오후 4시)보다 일찍 오후 1시에 장이 닫혀요.', timeLabel: '폐장' });
+  for (const k of BOK_DATES) push(k, { cls: 'fomc', chip: '한은', flag: '🇰🇷',
+    title: '한국은행 금융통화위원회 기준금리 결정',
+    desc: '오전 회의 뒤 결정을 발표하고, 이어서 총재 기자간담회가 열려요. 국내 대출·예금 금리에 바로 영향을 줘요.' });
+}
+
+// 미국 동부시간 → 한국시간. 미국 서머타임: 3월 둘째 일요일 ~ 11월 첫째 일요일
+function nthSunday(y, m, n) { const d = new Date(y, m - 1, 1); d.setDate(1 + (7 - d.getDay()) % 7 + 7 * (n - 1)); return d.getDate(); }
+function etToKst(k, hhmm) {
+  const [y, m, d] = k.split('-').map(Number);
+  const [h, mi] = hhmm.split(':').map(Number);
+  const dst = (m > 3 && m < 11) || (m === 3 && d >= nthSunday(y, 3, 2)) || (m === 11 && d < nthSunday(y, 11, 1));
+  const t = new Date(Date.UTC(y, m - 1, d, h + (dst ? 4 : 5), mi) + 9 * 3600e3);
+  const H = t.getUTCHours(), ap = H < 12 ? '오전' : '오후', h12 = H % 12 || 12;
+  return `${t.getUTCMonth() + 1}월 ${t.getUTCDate()}일(${DAYS[t.getUTCDay()]}) ${ap} ${h12}:${pad(t.getUTCMinutes())}`;
+}
+
+// ---------- 달력 ----------
+const nowD = new Date();
+const cal = { y: nowD.getFullYear(), m: nowD.getMonth() + 1, sel: todayKey() };
+
+function renderCalendar() {
+  const { y, m } = cal;
+  $('calTitle').textContent = `${y}년 ${m}월`;
+  const grid = $('calGrid');
+  grid.innerHTML = '';
+  DAYS.forEach((d, i) => {
+    const h = document.createElement('div');
+    h.className = 'dow' + (i === 0 ? ' sun' : i === 6 ? ' sat' : '');
+    h.textContent = d;
+    grid.appendChild(h);
+  });
+  const first = new Date(y, m - 1, 1);
+  const start = new Date(y, m - 1, 1 - first.getDay());
+  const weeks = Math.ceil((first.getDay() + new Date(y, m, 0).getDate()) / 7);
+  const tk = todayKey();
+  for (let i = 0; i < weeks * 7; i++) {
+    const dt = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    const k = keyOf(dt);
+    const hol = holidayNames(k);
+    const ev = ECON[k] || [];
+    const e = entries[k];
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'day'
+      + (dt.getMonth() !== m - 1 ? ' other' : '')
+      + (dt.getDay() === 0 ? ' sun' : dt.getDay() === 6 ? ' sat' : '')
+      + (hol.length ? ' hol' : '')
+      + (k === tk ? ' today' : '')
+      + (k === cal.sel ? ' sel' : '');
+    const num = document.createElement('div'); num.className = 'num';
+    const n = document.createElement('span'); n.textContent = dt.getDate();
+    num.appendChild(n);
+    if (e) {
+      const mk = document.createElement('span'); mk.className = 'mark';
+      mk.textContent = e.mood || e.weather || '✏️';
+      num.appendChild(mk);
+    }
+    b.appendChild(num);
+    if (hol.length) {
+      const hn = document.createElement('div'); hn.className = 'hname'; hn.textContent = hol.join(', ');
+      b.appendChild(hn);
+    }
+    if (ev.length) {
+      const chips = document.createElement('div'); chips.className = 'chips';
+      for (const x of ev) {
+        const c = document.createElement('span'); c.className = 'chip ' + x.cls; c.textContent = x.chip;
+        chips.appendChild(c);
+      }
+      b.appendChild(chips);
+    }
+    b.setAttribute('aria-label', [pretty(k, true), ...hol, ...ev.map(x => x.title), e ? '일기 있음' : ''].filter(Boolean).join(', '));
+    b.onclick = () => {
+      cal.sel = k;
+      if (dt.getMonth() !== m - 1) { cal.y = dt.getFullYear(); cal.m = dt.getMonth() + 1; }
+      renderCalendar();
+    };
+    grid.appendChild(b);
+  }
+  const notes = [];
+  if (!ECON_YEARS.includes(y)) notes.push(`${y}년 미국 경제 일정은 아직 넣어 두지 않았어요 (${ECON_YEARS.join('·')}년만 있어요).`);
+  if (!BOK_YEARS.includes(y)) notes.push(`${y}년 한국은행 금통위 일정은 아직 넣어 두지 않았어요.`);
+  if (!LUNAR[y]) notes.push(`${y}년은 설날·추석·부처님오신날 날짜가 없어 양력 공휴일만 표시돼요.`);
+  $('calNote').textContent = notes.join(' ');
+  renderCalEvents(cal.sel);
+  renderCalDiary(cal.sel);
+}
+
+// 카드 1: 그날의 공휴일·경제 일정
+function renderCalEvents(k) {
+  const box = $('calEvents');
+  box.innerHTML = '';
+  const h = document.createElement('h3'); h.textContent = '📅 ' + pretty(k, true);
+  box.appendChild(h);
+  const hols = holidayNames(k), evs = ECON[k] || [];
+  if (!hols.length && !evs.length) {
+    const none = document.createElement('div'); none.className = 'sub';
+    none.textContent = '이날은 공휴일이나 경제 일정이 없어요.';
+    box.appendChild(none);
+  }
+  for (const name of hols) {
+    const d = document.createElement('div'); d.className = 'item hol-item'; d.textContent = '🇰🇷 ' + name;
+    box.appendChild(d);
+  }
+  for (const x of evs) {
+    const row = document.createElement('div'); row.className = 'item';
+    const c = document.createElement('span'); c.className = 'chip ' + x.cls; c.textContent = x.chip;
+    const t = document.createElement('div');
+    const tt = document.createElement('div'); tt.textContent = (x.flag || '🇺🇸') + ' ' + x.title;
+    const sub = document.createElement('div'); sub.className = 'sub';
+    sub.textContent = x.time ? `${x.timeLabel ? x.timeLabel + ' ' : ''}한국시간 ${etToKst(k, x.time)} · ${x.desc}` : x.desc;
+    t.append(tt, sub);
+    row.append(c, t);
+    box.appendChild(row);
+  }
+}
+
+// 카드 2: 그날의 일기 (수정·삭제 가능)
+function renderCalDiary(k) {
+  const box = $('calDiary');
+  box.innerHTML = '';
+  const e = entries[k];
+  const head = document.createElement('div'); head.className = 'head';
+  const h = document.createElement('h3'); h.textContent = '📝 그날의 일기';
+  head.appendChild(h);
+  box.appendChild(head);
+  if (!e) {
+    const none = document.createElement('div'); none.className = 'sub';
+    none.textContent = k > todayKey() ? '아직 오지 않은 날이에요.' : '이날은 일기가 없어요.';
+    box.appendChild(none);
+    return;
+  }
+  const text = document.createElement('div'); text.className = 'diary-text';
+  text.textContent = `${(e.weather || '') + (e.mood || '')} ${e.text}`.trim();
+  box.appendChild(text);
+  if (e.news) {
+    const a = document.createElement('a'); a.className = 'diary-news';
+    a.href = e.news.link; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    a.textContent = '📰 ' + (e.news.titleKo || e.news.title); a.title = e.news.title;
+    box.appendChild(a);
+  }
+  const actions = document.createElement('div'); actions.className = 'actions';
+  const edit = document.createElement('button'); edit.className = 'ghost'; edit.textContent = '수정';
+  const del = document.createElement('button'); del.className = 'ghost'; del.textContent = '삭제';
+  edit.onclick = () => startEdit(k, text);
+  del.onclick = () => {
+    if (confirm(`${pretty(k)} 기록을 삭제할까요?`)) { delete entries[k]; save(); }
+  };
+  actions.append(edit, del);
+  head.appendChild(actions);
+}
+
+$('calPrev').onclick = () => { cal.m--; if (cal.m < 1) { cal.m = 12; cal.y--; } renderCalendar(); };
+$('calNext').onclick = () => { cal.m++; if (cal.m > 12) { cal.m = 1; cal.y++; } renderCalendar(); };
+$('calToday').onclick = () => {
+  const d = new Date(); cal.y = d.getFullYear(); cal.m = d.getMonth() + 1; cal.sel = todayKey(); renderCalendar();
+};
+
+// 일기 카드의 내용을 입력칸으로 바꿔 수정합니다 (Enter 저장 · Esc 취소 · 비우면 삭제)
+function startEdit(k, t) {
+  const input = document.createElement('input');
+  input.type = 'text'; input.maxLength = MAX; input.value = entries[k].text;
+  t.replaceChildren(input);
+  input.focus();
+  let done = false;
+  const finish = commit => {
+    if (done) return; done = true;
+    const v = input.value.trim();
+    if (commit) { if (v) entries[k].text = v; else delete entries[k]; save(); } else renderCalDiary(k);
+  };
+  input.onkeydown = e => {
+    if (e.key === 'Enter' && !e.isComposing) finish(true);
+    if (e.key === 'Escape') finish(false);
+  };
+  input.onblur = () => finish(true);
+}
+
+function renderAll() {
+  renderToday(); renderCalendar();
+  const s = streak();
+  $('streak').innerHTML = s ? `<b>${s}일</b> 연속 기록 중` : '';
+}
+function save() { persist(); renderAll(); }
+
+// ---------- 이벤트 ----------
+$('todayForm').onsubmit = e => {
+  e.preventDefault();
+  const v = $('todayInput').value.trim();
+  const k = todayKey();
+  if (!v) {
+    if (entries[k] && !confirm('내용이 비어 있어요. 오늘 기록을 삭제할까요?')) return;
+    delete entries[k];
+    save();
+    return;
+  }
+  const prev = entries[k] || {};
+  entries[k] = { ...prev, text: v, weather: draft.weather, mood: draft.mood };
+  if (!draft.mood) delete entries[k].news;
+  save();
+  const m = $('savedMsg'); m.classList.add('show');
+  setTimeout(() => m.classList.remove('show'), 1500);
+  // 기분이 정해졌고, 아직 그 기분에 맞춘 소식이 없으면 새로 찾기
+  if (draft.mood && (!prev.news || prev.news.mood !== draft.mood)) pickNews(false);
+};
+$('todayInput').oninput = updateCount;
+
+$('exportBtn').onclick = () => {
+  const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `한줄일기-${todayKey()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+$('importBtn').onclick = () => $('importFile').click();
+$('importFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    const valid = Object.entries(data)
+      .filter(([k]) => /^\d{4}-\d{2}-\d{2}$/.test(k))
+      .map(([k, v]) => [k, normalize(v)]).filter(([, v]) => v);
+    if (!valid.length) throw new Error('empty');
+    if (!confirm(`${valid.length}개의 기록을 가져올까요? 같은 날짜는 덮어써요.`)) return;
+    for (const [k, v] of valid) entries[k] = { ...v, text: v.text.slice(0, MAX) };
+    save();
+  } catch { alert('올바른 일기 파일이 아니에요.'); }
+  e.target.value = '';
+};
+
+// 자정이 지나면 날짜 갱신
+let lastDay = todayKey();
+setInterval(() => {
+  if (todayKey() === lastDay) return;
+  // 오늘이 있는 달을 보고 있었다면 새 날짜로 따라갑니다
+  if (cal.sel === lastDay) { const d = new Date(); cal.y = d.getFullYear(); cal.m = d.getMonth() + 1; cal.sel = todayKey(); }
+  lastDay = todayKey();
+  renderAll();
+}, 60000);
+
+buildPicker($('weatherPicker'), WEATHERS, 'weather');
+buildPicker($('moodPicker'), MOODS, 'mood');
+renderAll();
+$('todayInput').focus();
+</script>
+</body>
+</html>
