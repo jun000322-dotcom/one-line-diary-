@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `sw.js`는 같은 출처 파일만 네트워크 우선 + 캐시 대체로 처리한다. 캐시 파일 목록(`FILES`)을 바꾸면 `CACHE` 버전을 올린다.
 - 서비스 워커는 http(s)에서만 등록된다. `open index.html`(file://)로 열면 PWA 기능 없이 그대로 동작한다.
 - 저장 데이터는 기기·브라우저마다 따로라서, 기기 간 이동은 내보내기/가져오기로 한다.
+- 자동 업데이트(`자동 업데이트` 구역): 앱이 다시 보일 때와 10분마다 `./index.html`을 받아 처음 띄운 버전과 해시·`Last-Modified`를 비교하고, 더 새 버전이면 새로고침한다. 저장 안 한 입력이 있으면(`hasUnsavedInput`) 알림 띠만 띄운다. 그래서 배포는 푸시만 하면 되고 따로 버전을 올릴 필요가 없다.
 
 ## 실행과 검사
 

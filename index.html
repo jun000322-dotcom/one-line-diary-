@@ -65,16 +65,16 @@
   .streak { color: var(--muted); font-size: 14px; }
   .streak b { color: var(--accent); }
 
-  /* ---------- 백업 알림 ---------- */
-  .backup {
+  /* ---------- 알림 띠 (백업 알림 · 업데이트 알림) ---------- */
+  .notice {
     display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
     background: var(--accent-soft); border-radius: 12px; padding: 10px 14px;
     margin-bottom: 16px; font-size: 13px;
   }
-  .backup[hidden] { display: none; }
-  .backup .msg { flex: 1; min-width: 200px; }
-  .backup .actions { display: flex; gap: 4px; margin-left: auto; }
-  .backup button { font-size: 13px; padding: 4px 12px; }
+  .notice[hidden] { display: none; }
+  .notice .msg { flex: 1; min-width: 200px; }
+  .notice .actions { display: flex; gap: 4px; margin-left: auto; }
+  .notice button { font-size: 13px; padding: 4px 12px; }
 
   .today {
     background: var(--card); border: 1px solid var(--line); border-radius: 16px;
@@ -223,7 +223,14 @@
     <div class="streak" id="streak"></div>
   </header>
 
-  <div class="backup" id="backup" role="status" hidden>
+  <div class="notice" id="updateBar" role="status" hidden>
+    <span class="msg" id="updateMsg"></span>
+    <div class="actions">
+      <button type="button" id="updateNow" hidden>새로고침</button>
+    </div>
+  </div>
+
+  <div class="notice" id="backup" role="status" hidden>
     <span class="msg" id="backupMsg"></span>
     <div class="actions">
       <button type="button" id="backupNow">지금 백업</button>
@@ -458,12 +465,12 @@ function saveBackup(info) {
   try { localStorage.setItem(BACKUP_KEY, JSON.stringify(info)); } catch {}
 }
 // 일기 내용이 바뀌었는지 비교하기 위한 간단한 해시
-function sigOf(all) {
-  const s = JSON.stringify(all);
+function hashText(s) {
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = (h * 33 + s.charCodeAt(i)) | 0;
   return `${s.length}:${h}`;
 }
+const sigOf = all => hashText(JSON.stringify(all));
 function daysBetween(a, b) {
   const t = s => { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d); };
   return Math.round((t(b) - t(a)) / 86400000);
@@ -1120,6 +1127,70 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 }
 // 브라우저가 저장 공간이 부족할 때 일기를 지우지 않도록 요청합니다 (지원하는 브라우저만)
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ---------- 자동 업데이트 ----------
+// 홈 화면 앱은 백그라운드에서 다시 열면 예전 화면을 그대로 보여줍니다.
+// 그래서 앱이 다시 보일 때와 열려 있는 동안 10분마다 서버의 index.html을 확인하고,
+// 처음 불러온 것과 달라졌으면 새로고침합니다. 쓰고 있던 내용이 있으면 바로 새로고침하지 않고 알림만 띄웁니다.
+const UPDATE_EVERY = 10 * 60 * 1000;
+const UPDATED_FLAG = 'one-line-diary-updated';
+let appVersion = null;   // { hash, modified }: 지금 화면에 띄운 index.html
+
+// 서버의 index.html 버전. 서비스 워커를 거치므로 오프라인이면 캐시(=지금 띄운 화면)가 돌아옵니다.
+async function fetchVersion() {
+  const res = await fetch('./index.html', { cache: 'no-store' });
+  if (!res.ok) throw new Error(res.status);
+  const lm = Date.parse(res.headers.get('last-modified') || '');
+  return { hash: hashText(await res.text()), modified: isNaN(lm) ? null : lm };
+}
+// 내용이 다르고, 수정 시각을 알면 더 새것일 때만 새 버전으로 봅니다
+// (CDN 서버마다 잠깐 예전 버전을 줄 때 앞뒤로 오가며 새로고침하지 않도록)
+function isNewer(next, cur) {
+  if (next.hash === cur.hash) return false;
+  return !(next.modified && cur.modified) || next.modified > cur.modified;
+}
+// 저장하지 않은 오늘 일기나 지난 일기 수정 중인 입력칸이 있는지
+function hasUnsavedInput() {
+  const e = entries[todayKey()] || {};
+  if ($('todayInput').value.trim() !== (e.text || '')) return true;
+  if ((draft.weather || null) !== (e.weather || null) || (draft.mood || null) !== (e.mood || null)) return true;
+  return !!$('calDiary').querySelector('input');
+}
+function reloadToUpdate() {
+  try { sessionStorage.setItem(UPDATED_FLAG, '1'); } catch {}
+  location.reload();
+}
+function showUpdateBar(msg, withButton) {
+  $('updateMsg').textContent = msg;
+  $('updateNow').hidden = !withButton;
+  $('updateBar').hidden = false;
+}
+let checking = false;
+async function checkUpdate() {
+  if (checking || (appVersion && document.hidden)) return;   // 기준 버전은 숨겨져 있어도 기록
+  checking = true;
+  try {
+    if (!appVersion) { appVersion = await fetchVersion(); return; }
+    const next = await fetchVersion();
+    if (!isNewer(next, appVersion)) return;
+    if (hasUnsavedInput()) showUpdateBar('✨ 새 버전이 있어요. 쓰던 내용을 저장한 뒤 새로고침해 주세요.', true);
+    else reloadToUpdate();
+  } catch {
+    // 오프라인 등: 다음 확인 때 다시 시도
+  } finally { checking = false; }
+}
+if (location.protocol.startsWith('http')) {
+  $('updateNow').onclick = reloadToUpdate;
+  checkUpdate();   // 지금 띄운 버전을 기준으로 기록
+  document.addEventListener('visibilitychange', checkUpdate);
+  setInterval(checkUpdate, UPDATE_EVERY);
+  let updated = false;
+  try { updated = sessionStorage.getItem(UPDATED_FLAG) === '1'; sessionStorage.removeItem(UPDATED_FLAG); } catch {}
+  if (updated) {
+    showUpdateBar('✨ 새 버전으로 업데이트했어요.', false);
+    setTimeout(() => { $('updateBar').hidden = true; }, 3000);
+  }
+}
 </script>
 </body>
 </html>
