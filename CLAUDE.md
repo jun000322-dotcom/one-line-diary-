@@ -6,6 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 "한 줄 일기" — 빌드 도구·의존성·서버 없이 `index.html` 한 파일(HTML + `<style>` + `<script>`)로 된 브라우저 앱이다. UI 문구와 코드 주석은 모두 한국어로 쓴다.
 
+폰 홈 화면 설치(PWA)용 파일만 따로 있다: `manifest.webmanifest`, `sw.js`(서비스 워커), `icons/`. 앱 코드는 계속 `index.html`에만 둔다.
+- `sw.js`는 같은 출처 파일만 네트워크 우선 + 캐시 대체로 처리한다. 캐시 파일 목록(`FILES`)을 바꾸면 `CACHE` 버전을 올린다.
+- 서비스 워커는 http(s)에서만 등록된다. `open index.html`(file://)로 열면 PWA 기능 없이 그대로 동작한다.
+- 저장 데이터는 기기·브라우저마다 따로라서, 기기 간 이동은 내보내기/가져오기로 한다.
+
 ## 실행과 검사
 
 - 실행: `open index.html` (파일을 브라우저로 직접 연다. 로컬 서버 불필요)

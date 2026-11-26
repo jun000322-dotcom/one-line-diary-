@@ -2,8 +2,18 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>한 줄 일기</title>
+<!-- 폰 홈 화면에 앱처럼 설치 (PWA) -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="theme-color" content="#faf8f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1b1a18" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="한 줄 일기">
 <style>
   :root {
     --bg: #faf8f4; --card: #ffffff; --text: #2b2a28; --muted: #8a867e;
@@ -41,6 +51,15 @@
     line-height: 1.6;
   }
   main { max-width: 640px; margin: 0 auto; padding: 40px 16px 80px; }
+  /* 홈 화면 앱으로 열면 노치·홈 표시줄을 피합니다 */
+  @supports (padding: env(safe-area-inset-top)) {
+    main {
+      padding-top: calc(40px + env(safe-area-inset-top));
+      padding-bottom: calc(80px + env(safe-area-inset-bottom));
+      padding-left: calc(16px + env(safe-area-inset-left));
+      padding-right: calc(16px + env(safe-area-inset-right));
+    }
+  }
   header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 24px; }
   h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; }
   .streak { color: var(--muted); font-size: 14px; }
@@ -1091,7 +1110,16 @@ buildPicker($('weatherPicker'), WEATHERS, 'weather');
 buildPicker($('moodPicker'), MOODS, 'mood');
 buildMoodLegend();
 renderAll();
-$('todayInput').focus();
+// 폰에서는 자동 포커스가 키보드를 띄워 화면을 가리므로 넓은 화면에서만
+if (!matchMedia('(max-width: 480px)').matches) $('todayInput').focus();
+
+// ---------- 앱 설치 (PWA) ----------
+// 서비스 워커는 http(s)에서만 동작합니다. 파일로 직접 열었을 때(file://)는 건너뜁니다.
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+// 브라우저가 저장 공간이 부족할 때 일기를 지우지 않도록 요청합니다 (지원하는 브라우저만)
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 </script>
 </body>
 </html>
