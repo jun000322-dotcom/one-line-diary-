@@ -15,6 +15,9 @@
     --fomc: #5b4bc4; --fomc-bg: #e6e2fb;
     --growth: #0f7c8c; --growth-bg: #d5eff2;
     --market: #6b6760; --market-bg: #ebe7e0;
+    /* 달력 칸에 칠하는 기분 색 */
+    --m-joy: #fff1bf; --m-calm: #e0f2dc; --m-meh: #eceae5; --m-sad: #dce8fa;
+    --m-angry: #fbdcd8; --m-tired: #e9e1f6; --m-anxious: #fbe5cf;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -27,6 +30,8 @@
       --fomc: #b3a8ff; --fomc-bg: #2f2a4d;
       --growth: #6fd0dc; --growth-bg: #173a3f;
       --market: #b5afa5; --market-bg: #3a3833;
+      --m-joy: #3f3717; --m-calm: #213526; --m-meh: #302e2a; --m-sad: #1f2c40;
+      --m-angry: #40231f; --m-tired: #2e2641; --m-anxious: #3f2d1a;
     }
   }
   * { box-sizing: border-box; }
@@ -40,6 +45,17 @@
   h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; }
   .streak { color: var(--muted); font-size: 14px; }
   .streak b { color: var(--accent); }
+
+  /* ---------- 백업 알림 ---------- */
+  .backup {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+    background: var(--accent-soft); border-radius: 12px; padding: 10px 14px;
+    margin-bottom: 16px; font-size: 13px;
+  }
+  .backup[hidden] { display: none; }
+  .backup .msg { flex: 1; min-width: 200px; }
+  .backup .actions { display: flex; gap: 4px; margin-left: auto; }
+  .backup button { font-size: 13px; padding: 4px 12px; }
 
   .today {
     background: var(--card); border: 1px solid var(--line); border-radius: 16px;
@@ -76,6 +92,17 @@
   .saved { color: var(--accent); opacity: 0; transition: opacity .3s; }
   .saved.show { opacity: 1; }
 
+  /* ---------- 지난 오늘 ---------- */
+  .lookback { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+  .lookback[hidden] { display: none; }
+  button.lb-item {
+    display: block; width: 100%; text-align: left; white-space: normal;
+    background: var(--chip); color: var(--text); padding: 10px 12px;
+  }
+  button.lb-item:hover { background: var(--accent-soft); }
+  .lb-label { font-size: 12px; color: var(--muted); }
+  .lb-text { font-size: 14px; word-break: break-word; }
+
   .news {
     margin-top: 16px; padding: 14px 16px; border-radius: 12px; background: var(--accent-soft);
     font-size: 14px;
@@ -110,7 +137,16 @@
   button.day:hover { border-color: var(--muted); }
   button.day.other { opacity: .38; }
   button.day.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-  button.day.sel { background: var(--accent-soft); }
+  button.day.sel { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--muted); }
+  /* 기분 색 (선택한 날도 기분 색을 유지하고 테두리로 구분) */
+  button.day.m-joy, .mood-dot.m-joy { background: var(--m-joy); }
+  button.day.m-calm, .mood-dot.m-calm { background: var(--m-calm); }
+  button.day.m-meh, .mood-dot.m-meh { background: var(--m-meh); }
+  button.day.m-sad, .mood-dot.m-sad { background: var(--m-sad); }
+  button.day.m-angry, .mood-dot.m-angry { background: var(--m-angry); }
+  button.day.m-tired, .mood-dot.m-tired { background: var(--m-tired); }
+  button.day.m-anxious, .mood-dot.m-anxious { background: var(--m-anxious); }
+  .mood-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; border: 1px solid var(--line); margin-right: 3px; vertical-align: -1px; }
   .day .num { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; }
   .day.sun .num, .day.hol .num { color: var(--holiday); }
   .day.sat:not(.hol) .num { color: var(--sat); }
@@ -168,6 +204,14 @@
     <div class="streak" id="streak"></div>
   </header>
 
+  <div class="backup" id="backup" role="status" hidden>
+    <span class="msg" id="backupMsg"></span>
+    <div class="actions">
+      <button type="button" id="backupNow">지금 백업</button>
+      <button type="button" class="ghost" id="backupLater">나중에</button>
+    </div>
+  </div>
+
   <section class="today">
     <div class="date" id="todayLabel"></div>
     <div class="picker">
@@ -186,6 +230,8 @@
       <span class="saved" id="savedMsg">저장했어요 ✓</span>
       <span id="count">0 / 120</span>
     </div>
+
+    <div class="lookback" id="lookback" hidden></div>
 
     <div class="news" id="news" hidden>
       <div class="why" id="newsWhy"></div>
@@ -208,6 +254,7 @@
       <span><span class="chip fomc">금리</span>FOMC·한국은행</span>
       <span><span class="chip market">휴장</span>미국 증시 휴장·조기폐장</span>
     </div>
+    <div class="legend" id="moodLegend" aria-label="기분 색"></div>
     <div class="cal-note" id="calNote"></div>
     <div class="cal-detail" id="calEvents"></div>
     <div class="cal-detail" id="calDiary"></div>
@@ -233,21 +280,22 @@ const WEATHERS = [
   { e: '⛈️', n: '뇌우' }, { e: '❄️', n: '눈' }, { e: '🌫️', n: '안개' }, { e: '💨', n: '바람' },
 ];
 // 좋은 기분은 '유지', 나쁜 기분은 '전환'하는 소식을 고릅니다.
+// id: 달력 칸 색 클래스(m-<id>) 이름
 // kw: 뉴스 고를 때 쓰는 영어 키워드 (제목에 있으면 2점, 요약에 있으면 1점)
 const MOODS = [
-  { e: '😄', n: '기쁨', goal: '기분 유지', why: '기쁜 날엔 함께 축하하고 싶은 소식으로 기쁨을 이어가요',
+  { e: '😄', n: '기쁨', id: 'joy', goal: '기분 유지', why: '기쁜 날엔 함께 축하하고 싶은 소식으로 기쁨을 이어가요',
     kw: ['success', 'record', 'first', 'win', 'wins', 'celebrat', 'breakthrough', 'joy', 'restored', 'saved', 'approved', 'achiev', 'milestone', 'return'] },
-  { e: '😌', n: '평온', goal: '기분 유지', why: '평온한 하루엔 잔잔하고 따뜻한 이야기로 그 마음을 지켜요',
+  { e: '😌', n: '평온', id: 'calm', goal: '기분 유지', why: '평온한 하루엔 잔잔하고 따뜻한 이야기로 그 마음을 지켜요',
     kw: ['nature', 'garden', 'bird', 'forest', 'ocean', 'tree', 'tea', 'library', 'music', 'art', 'retired', 'community', 'peaceful', 'quiet', 'walk'] },
-  { e: '😐', n: '무덤덤', goal: '기분 전환', why: '무덤덤한 날엔 호기심이 반짝 깨어나는 놀라운 발견을 가져왔어요',
+  { e: '😐', n: '무덤덤', id: 'meh', goal: '기분 전환', why: '무덤덤한 날엔 호기심이 반짝 깨어나는 놀라운 발견을 가져왔어요',
     kw: ['discover', 'surprising', 'ancient', 'space', 'hidden', 'first-ever', 'rare', 'mystery', 'species', 'unexpected', 'reveal', 'fossil', 'planet', 'secret'] },
-  { e: '😢', n: '슬픔', goal: '기분 전환', why: '마음이 무거운 날엔 누군가의 따뜻한 선행 이야기를 건네요',
+  { e: '😢', n: '슬픔', id: 'sad', goal: '기분 전환', why: '마음이 무거운 날엔 누군가의 따뜻한 선행 이야기를 건네요',
     kw: ['kindness', 'kind', 'donat', 'volunteer', 'rescue', 'reunite', 'help', 'community', 'hero', 'generous', 'grateful', 'love', 'gift', 'neighbor', 'stranger'] },
-  { e: '😠', n: '화남', goal: '기분 전환', why: '화가 난 날엔 피식 웃게 되는 귀여운 소식으로 열을 식혀요',
+  { e: '😠', n: '화남', id: 'angry', goal: '기분 전환', why: '화가 난 날엔 피식 웃게 되는 귀여운 소식으로 열을 식혀요',
     kw: ['dog', 'cat', 'puppy', 'kitten', 'animal', 'funny', 'laugh', 'smile', 'adorable', 'play', 'baby', 'otter', 'penguin', 'goat', 'bird'] },
-  { e: '😴', n: '피곤', goal: '기분 전환', why: '지친 날엔 기운이 나는 소식으로 작은 활력을 채워요',
+  { e: '😴', n: '피곤', id: 'tired', goal: '기분 전환', why: '지친 날엔 기운이 나는 소식으로 작은 활력을 채워요',
     kw: ['energy', 'boost', 'rest', 'sleep', 'recovery', 'coffee', 'walk', 'sunlight', 'refresh', 'young', 'youthful', 'strength', 'restore', 'nap'] },
-  { e: '😰', n: '불안', goal: '기분 전환', why: '불안한 날엔 세상이 조금씩 나아지고 있다는 증거를 보여드려요',
+  { e: '😰', n: '불안', id: 'anxious', goal: '기분 전환', why: '불안한 날엔 세상이 조금씩 나아지고 있다는 증거를 보여드려요',
     kw: ['fall', 'falls', 'decline', 'drop', 'reduce', 'protect', 'restored', 'recover', 'success', 'solution', 'progress', 'safe', 'cleaner', 'prevent', 'lower'] },
 ];
 // 어떤 기분이든 무거운 소식은 피합니다
@@ -342,6 +390,84 @@ function renderToday() {
 function updateCount() {
   $('count').textContent = `${$('todayInput').value.length} / ${MAX}`;
   $('saveBtn').textContent = entries[todayKey()] ? '수정' : '저장';
+}
+
+// ---------- 지난 오늘 ----------
+// 날짜 k를 기준으로 지난해 같은 날(최근 해부터)과 한 달 전 같은 날의 일기를 찾습니다.
+// 한 달 전 달에 같은 날짜가 없으면(예: 3/31 → 2/31) 건너뜁니다. 최대 3개.
+function lookbacks(k, all) {
+  const [y, m, d] = k.split('-').map(Number);
+  const md = k.slice(5);
+  const out = Object.keys(all)
+    .filter(x => x.slice(5) === md && x < k)
+    .sort().reverse()
+    .map(x => ({ k: x, label: `${y - Number(x.slice(0, 4))}년 전 오늘` }));
+  const py = m === 1 ? y - 1 : y, pm = m === 1 ? 12 : m - 1;
+  if (d <= new Date(py, pm, 0).getDate()) {
+    const mk = `${py}-${pad(pm)}-${pad(d)}`;
+    if (all[mk]) out.push({ k: mk, label: '한 달 전 오늘' });
+  }
+  return out.slice(0, 3);
+}
+function renderLookback() {
+  const box = $('lookback');
+  box.replaceChildren();
+  const list = lookbacks(todayKey(), entries);
+  box.hidden = !list.length;
+  for (const it of list) {
+    const e = entries[it.k];
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'lb-item';
+    const lab = document.createElement('div'); lab.className = 'lb-label';
+    lab.textContent = `🕰️ ${it.label} · ${pretty(it.k)}`;
+    const t = document.createElement('div'); t.className = 'lb-text';
+    t.textContent = `${(e.weather || '') + (e.mood || '')} ${e.text}`.trim();
+    b.append(lab, t);
+    b.onclick = () => showDay(it.k);
+    box.appendChild(b);
+  }
+}
+
+// ---------- 백업 알림 ----------
+// { last: 마지막 내보낸 날짜, sig: 그때 일기 내용의 해시, snooze: '나중에'를 누른 날짜 }
+const BACKUP_KEY = 'one-line-diary-backup';
+const BACKUP_DAYS = 7;
+function loadBackup() {
+  try { return JSON.parse(localStorage.getItem(BACKUP_KEY)) || {}; } catch { return {}; }
+}
+function saveBackup(info) {
+  try { localStorage.setItem(BACKUP_KEY, JSON.stringify(info)); } catch {}
+}
+// 일기 내용이 바뀌었는지 비교하기 위한 간단한 해시
+function sigOf(all) {
+  const s = JSON.stringify(all);
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = (h * 33 + s.charCodeAt(i)) | 0;
+  return `${s.length}:${h}`;
+}
+function daysBetween(a, b) {
+  const t = s => { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+  return Math.round((t(b) - t(a)) / 86400000);
+}
+// 띄울 알림 문구를 돌려줍니다. 알릴 필요가 없으면 null.
+// - 백업 후 일기가 바뀌지 않았거나, 오늘 '나중에'를 눌렀으면 알리지 않습니다.
+// - 백업한 적이 없으면 첫 일기 날짜부터 셉니다.
+function backupMessage(all, info, today) {
+  const keys = Object.keys(all).sort();
+  if (!keys.length) return null;
+  if (info.snooze === today) return null;
+  if (info.sig && info.sig === sigOf(all)) return null;
+  if (info.last) {
+    const n = daysBetween(info.last, today);
+    return n >= BACKUP_DAYS ? `마지막 백업 후 ${n}일이 지났어요.` : null;
+  }
+  const n = daysBetween(keys[0], today);
+  return n >= BACKUP_DAYS ? `일기를 ${keys.length}개 썼는데 아직 백업한 적이 없어요.` : null;
+}
+function renderBackup() {
+  const msg = backupMessage(entries, loadBackup(), todayKey());
+  $('backup').hidden = !msg;
+  if (msg) $('backupMsg').textContent = `💾 ${msg} 브라우저 데이터를 지우면 일기도 사라지니 파일로 내보내 두세요.`;
 }
 
 // ---------- 뉴스 ----------
@@ -742,6 +868,8 @@ function renderCalendar() {
       + (hol.length ? ' hol' : '')
       + (k === tk ? ' today' : '')
       + (k === cal.sel ? ' sel' : '');
+    const mo = e && findMood(e.mood);
+    if (mo) b.classList.add('m-' + mo.id);
     const num = document.createElement('div'); num.className = 'num';
     const n = document.createElement('span'); n.textContent = dt.getDate();
     num.appendChild(n);
@@ -850,6 +978,25 @@ $('calToday').onclick = () => {
   const d = new Date(); cal.y = d.getFullYear(); cal.m = d.getMonth() + 1; cal.sel = todayKey(); renderCalendar();
 };
 
+// 달력을 그 날짜로 옮기고 일기 카드를 보여줍니다
+function showDay(k) {
+  const [y, m] = k.split('-').map(Number);
+  cal.y = y; cal.m = m; cal.sel = k;
+  renderCalendar();
+  $('calDiary').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function buildMoodLegend() {
+  const box = $('moodLegend');
+  box.replaceChildren();
+  for (const mo of MOODS) {
+    const s = document.createElement('span');
+    const dot = document.createElement('span'); dot.className = 'mood-dot m-' + mo.id;
+    s.append(dot, `${mo.e} ${mo.n}`);
+    box.appendChild(s);
+  }
+}
+
 // 일기 카드의 내용을 입력칸으로 바꿔 수정합니다 (Enter 저장 · Esc 취소 · 비우면 삭제)
 function startEdit(k, t) {
   const input = document.createElement('input');
@@ -870,7 +1017,7 @@ function startEdit(k, t) {
 }
 
 function renderAll() {
-  renderToday(); renderCalendar();
+  renderToday(); renderLookback(); renderCalendar(); renderBackup();
   const s = streak();
   $('streak').innerHTML = s ? `<b>${s}일</b> 연속 기록 중` : '';
 }
@@ -898,13 +1045,21 @@ $('todayForm').onsubmit = e => {
 };
 $('todayInput').oninput = updateCount;
 
-$('exportBtn').onclick = () => {
+function exportDiary() {
   const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `한줄일기-${todayKey()}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
+  saveBackup({ last: todayKey(), sig: sigOf(entries) });
+  renderBackup();
+}
+$('exportBtn').onclick = exportDiary;
+$('backupNow').onclick = exportDiary;
+$('backupLater').onclick = () => {
+  saveBackup({ ...loadBackup(), snooze: todayKey() });
+  renderBackup();
 };
 $('importBtn').onclick = () => $('importFile').click();
 $('importFile').onchange = async e => {
@@ -934,6 +1089,7 @@ setInterval(() => {
 
 buildPicker($('weatherPicker'), WEATHERS, 'weather');
 buildPicker($('moodPicker'), MOODS, 'mood');
+buildMoodLegend();
 renderAll();
 $('todayInput').focus();
 </script>
